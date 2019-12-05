@@ -21,13 +21,13 @@ module.exports = class CypressStyleAsync {
     const self = this;
     return {
       get context() {
-        return self.context;
+        return self._context;
       },
       writeContext(obj) {
-        Object.assign(self.context, obj);
+        Object.assign(self._context, obj);
       },
       clearContext() {
-        self.context = {};
+        self._context = {};
       },
       sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
