@@ -1,6 +1,3 @@
-import makeDebug from "debug";
-const debug = makeDebug("cypress-style-async");
-
 export interface CommandInvocation<Args = any> {
   name: string;
   args: Args;
@@ -48,13 +45,16 @@ class CypressStyleAsync<
   _insertionMode: "start" | "end";
   _onError: (err: Error) => void;
   _onCommandRun: (command: CommandInvocation) => void;
+  _debugLog: (...args: any) => void;
 
   constructor({
     onError = () => {},
     onCommandRun = () => {},
+    debugLog = () => {},
   }: {
     onError?: (err: Error) => void;
     onCommandRun?: (command: CommandInvocation) => void;
+    debugLog?: (...args: any) => void;
   } = {}) {
     // @ts-ignore could be instantiated with different constraint
     this._context = {};
@@ -66,6 +66,7 @@ class CypressStyleAsync<
     this._insertionMode = "end";
     this._onError = onError;
     this._onCommandRun = onCommandRun;
+    this._debugLog = debugLog;
   }
 
   _makeCommand<Name extends keyof Api & string>(
@@ -112,7 +113,7 @@ class CypressStyleAsync<
         this._nextPrependedCommandQueue.push(command);
       }
     }
-    debug(`Command enqueued at ${this._insertionMode}`, command);
+    this._debugLog(`Command enqueued at ${this._insertionMode}`, command);
   }
 
   registerCommand<Name extends keyof Api & string>(
@@ -137,10 +138,10 @@ class CypressStyleAsync<
   }
 
   async _processQueue() {
-    debug("Now running");
+    this._debugLog("Now running");
     this.isRunning = true;
     while (this._commandQueue.length > 0) {
-      debug("Command queue:", this._commandQueue);
+      this._debugLog("Command queue:", this._commandQueue);
 
       const command = this._commandQueue.shift();
       if (command == null) {
@@ -149,7 +150,7 @@ class CypressStyleAsync<
 
       let result;
       try {
-        debug("Running command", command);
+        this._debugLog("Running command", command);
         const handler = this._commandHandlers[command.name];
         if (!handler) {
           throw new Error(
@@ -160,7 +161,7 @@ class CypressStyleAsync<
         this._onCommandRun(command);
         result = await handler.doRun(command, this._makeCommandApi(command));
       } catch (err: any) {
-        debug("Stopped running due to error state", err);
+        this._debugLog("Stopped running due to error state", err);
         this._insertionMode = "end";
         this.isRunning = false;
         this._nextPrependedCommandQueue = [];
@@ -178,7 +179,7 @@ class CypressStyleAsync<
     }
     this._insertionMode = "end";
     this.isRunning = false;
-    debug("Finished running");
+    this._debugLog("Finished running");
   }
 }
 

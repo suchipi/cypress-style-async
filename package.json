@@ -11,8 +11,5 @@
     "@types/node": "^20.8.9",
     "prettier": "^3.0.3",
     "typescript": "^5.2.2"
-  },
-  "dependencies": {
-    "debug": "^4.1.1"
   }
 }
