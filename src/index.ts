@@ -24,11 +24,15 @@ class CypressStyleAsync<
   Api extends ApiSupertype,
   Context extends ContextSupertype = ContextSupertype,
 > {
-  _context: Context;
+  // @ts-ignore could be assignable to different constraint
+  _context: Context = {};
 
   api: Partial<{
     [Key in keyof Api]: (...params: Parameters<Api[Key]>) => typeof this.api;
-  }>;
+  }> &
+    PromiseLike<any>;
+
+  _awaitable: Promise<any> = Promise.resolve();
 
   _commandHandlers: Partial<{
     [Name in keyof Api]: {
@@ -37,12 +41,13 @@ class CypressStyleAsync<
         commandApi: CommandApi<Context>
       ) => Promise<void>;
     };
-  }>;
+  }> = {};
 
-  _commandQueue: Array<CommandInvocation>;
-  _nextPrependedCommandQueue: Array<CommandInvocation>;
-  isRunning: boolean;
-  _insertionMode: "start" | "end";
+  _commandQueue: Array<CommandInvocation> = [];
+  _nextPrependedCommandQueue: Array<CommandInvocation> = [];
+  isRunning: boolean = false;
+  _insertionMode: "start" | "end" = "end";
+
   _onError: (err: Error) => void;
   _onCommandRun: (command: CommandInvocation) => void;
   _debugLog: (...args: any) => void;
@@ -56,17 +61,28 @@ class CypressStyleAsync<
     onCommandRun?: (command: CommandInvocation) => void;
     debugLog?: (...args: any) => void;
   } = {}) {
-    // @ts-ignore could be instantiated with different constraint
-    this._context = {};
-    this.api = {} as any;
-    this._commandHandlers = {} as any;
-    this._commandQueue = [];
-    this._nextPrependedCommandQueue = [];
-    this.isRunning = false;
-    this._insertionMode = "end";
     this._onError = onError;
     this._onCommandRun = onCommandRun;
     this._debugLog = debugLog;
+
+    this.api = {} as any;
+    Object.defineProperties(this.api, {
+      then: {
+        configurable: true,
+        enumerable: false,
+        get: () => this._awaitable.then,
+      },
+      catch: {
+        configurable: true,
+        enumerable: false,
+        get: () => this._awaitable.catch,
+      },
+      finally: {
+        configurable: true,
+        enumerable: false,
+        get: () => this._awaitable.finally,
+      },
+    });
   }
 
   _makeCommand<Name extends keyof Api & string>(
@@ -127,14 +143,18 @@ class CypressStyleAsync<
       doRun,
     };
 
-    this.api[name] = (...args) => {
+    const apiMethod = (...args: any) => {
       const command = this._makeCommand(name, args);
       this._insert(command);
       if (!this.isRunning) {
-        this._processQueue();
+        this._awaitable = this._processQueue().then(
+          () => this._context.lastReturnValue
+        );
       }
       return this.api;
     };
+
+    this.api[name] = apiMethod as any;
   }
 
   async _processQueue() {
