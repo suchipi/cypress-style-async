@@ -4,10 +4,8 @@ export interface CommandInvocation<Args = any> {
   retryCount: number;
 }
 
-export type ContextSupertype = { lastReturnValue: any };
-
-export interface CommandApi<Context extends ContextSupertype> {
-  readonly context: Context;
+export interface CommandApi<Context extends {}> {
+  readonly context: Context & { lastReturnValue: any };
 
   writeContext(obj: Partial<Context>): void;
   clearContext(): void;
@@ -17,22 +15,18 @@ export interface CommandApi<Context extends ContextSupertype> {
 }
 
 export interface ApiSupertype {
-  [commandName: string]: (...args: any) => any;
+  [commandName: string]: (...args: any) => Promise<any>;
 }
 
-class CypressStyleAsync<
-  Api extends ApiSupertype,
-  Context extends ContextSupertype = ContextSupertype,
-> {
-  // @ts-ignore could be assignable to different constraint
-  _context: Context = {};
+export class CypressStyleAsync<Api extends ApiSupertype, Context extends {}> {
+  // @ts-ignore could be instantiated with different constraint
+  _context: Context & { lastReturnValue: any } = { lastReturnValue: undefined };
 
-  api: Partial<{
+  api: {
     [Key in keyof Api]: (...params: Parameters<Api[Key]>) => typeof this.api;
-  }> &
-    PromiseLike<any>;
+  } & Promise<any>;
 
-  _awaitable: Promise<any> = Promise.resolve();
+  _currentPromise: Promise<any> = Promise.resolve();
 
   _commandHandlers: Partial<{
     [Name in keyof Api]: {
@@ -70,17 +64,26 @@ class CypressStyleAsync<
       then: {
         configurable: true,
         enumerable: false,
-        get: () => this._awaitable.then,
+        get: () => {
+          const promise = this._currentPromise;
+          return promise.then.bind(promise);
+        },
       },
       catch: {
         configurable: true,
         enumerable: false,
-        get: () => this._awaitable.catch,
+        get: () => {
+          const promise = this._currentPromise;
+          return promise.catch.bind(promise);
+        },
       },
       finally: {
         configurable: true,
         enumerable: false,
-        get: () => this._awaitable.finally,
+        get: () => {
+          const promise = this._currentPromise;
+          return promise.finally.bind(promise);
+        },
       },
     });
   }
@@ -137,7 +140,7 @@ class CypressStyleAsync<
     doRun: (
       command: CommandInvocation<Parameters<Api[Name]>>,
       commandApi: CommandApi<Context>
-    ) => Promise<void>
+    ) => ReturnType<Api[Name]>
   ) {
     this._commandHandlers[name] = {
       doRun,
@@ -147,7 +150,7 @@ class CypressStyleAsync<
       const command = this._makeCommand(name, args);
       this._insert(command);
       if (!this.isRunning) {
-        this._awaitable = this._processQueue().then(
+        this._currentPromise = this._processQueue().then(
           () => this._context.lastReturnValue
         );
       }
@@ -188,7 +191,8 @@ class CypressStyleAsync<
         this._commandQueue = [];
 
         this._onError(err);
-        return;
+        // re-throw so this._currentPromise gets rejected
+        throw err;
       }
       this._context.lastReturnValue = result;
 
@@ -202,5 +206,3 @@ class CypressStyleAsync<
     this._debugLog("Finished running");
   }
 }
-
-module.exports = CypressStyleAsync;

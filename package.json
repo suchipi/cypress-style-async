@@ -4,12 +4,14 @@
   "main": "dist/index.js",
   "license": "MIT",
   "scripts": {
-    "build": "rm -rf dist && npx tsc"
+    "build": "rm -rf dist && npx tsc",
+    "test": "vitest"
   },
   "devDependencies": {
     "@types/debug": "^4.1.10",
     "@types/node": "^20.8.9",
     "prettier": "^3.0.3",
-    "typescript": "^5.2.2"
+    "typescript": "^5.2.2",
+    "vitest": "^0.34.6"
   }
 }
