@@ -4,7 +4,7 @@ export interface CommandInvocation<Args = any> {
   retryCount: number;
 }
 
-export interface CommandApi<Context extends {}> {
+export interface ChainHelpers<Context extends {}> {
   readonly context: Context & { lastReturnValue: any };
 
   writeContext(obj: Partial<Context>): void;
@@ -14,25 +14,33 @@ export interface CommandApi<Context extends {}> {
   retry(arg: { error: Error; maxRetries: number }): void;
 }
 
-export interface ApiSupertype {
+export interface CommandsMapSupertype {
   [commandName: string]: (...args: any) => Promise<any>;
 }
 
-export class CypressStyleAsync<Api extends ApiSupertype, Context extends {}> {
+export class CypressStyleAsync<
+  CommandsMap extends CommandsMapSupertype,
+  ChainContext extends {},
+  LastReturnValue = undefined
+> {
   // @ts-ignore could be instantiated with different constraint
-  _context: Context & { lastReturnValue: any } = { lastReturnValue: undefined };
+  _context: ChainContext & { lastReturnValue: LastReturnValue } = {
+    lastReturnValue: undefined,
+  };
 
   api: {
-    [Key in keyof Api]: (...params: Parameters<Api[Key]>) => typeof this.api;
-  } & Promise<any>;
+    [Key in keyof CommandsMap]: (
+      ...params: Parameters<CommandsMap[Key]>
+    ) => typeof this.api;
+  } & Promise<LastReturnValue>;
 
-  _currentPromise: Promise<any> = Promise.resolve();
+  _currentPromise: Promise<LastReturnValue> = Promise.resolve() as any;
 
   _commandHandlers: Partial<{
-    [Name in keyof Api]: {
+    [Name in keyof CommandsMap]: {
       doRun: (
-        command: CommandInvocation<Parameters<Api[Name]>>,
-        commandApi: CommandApi<Context>
+        command: CommandInvocation<Parameters<CommandsMap[Name]>>,
+        helpers: ChainHelpers<ChainContext>
       ) => Promise<void>;
     };
   }> = {};
@@ -88,14 +96,14 @@ export class CypressStyleAsync<Api extends ApiSupertype, Context extends {}> {
     });
   }
 
-  _makeCommand<Name extends keyof Api & string>(
+  _makeCommand<Name extends keyof CommandsMap & string>(
     name: Name,
-    args: Parameters<Api[Name]>
-  ): CommandInvocation<Parameters<Api[Name]>> {
+    args: Parameters<CommandsMap[Name]>
+  ): CommandInvocation<Parameters<CommandsMap[Name]>> {
     return { name, args, retryCount: 0 };
   }
 
-  _makeCommandApi(command: CommandInvocation): CommandApi<Context> {
+  _makeCommandHelpers(command: CommandInvocation): ChainHelpers<ChainContext> {
     const self = this;
     return {
       get context() {
@@ -135,12 +143,12 @@ export class CypressStyleAsync<Api extends ApiSupertype, Context extends {}> {
     this._debugLog(`Command enqueued at ${this._insertionMode}`, command);
   }
 
-  registerCommand<Name extends keyof Api & string>(
+  registerCommand<Name extends keyof CommandsMap & string>(
     name: Name,
     doRun: (
-      command: CommandInvocation<Parameters<Api[Name]>>,
-      commandApi: CommandApi<Context>
-    ) => ReturnType<Api[Name]>
+      command: CommandInvocation<Parameters<CommandsMap[Name]>>,
+      helpers: ChainHelpers<ChainContext>
+    ) => ReturnType<CommandsMap[Name]>
   ) {
     this._commandHandlers[name] = {
       doRun,
@@ -182,7 +190,10 @@ export class CypressStyleAsync<Api extends ApiSupertype, Context extends {}> {
         }
         this._insertionMode = "start";
         this._onCommandRun(command);
-        result = await handler.doRun(command, this._makeCommandApi(command));
+        result = await handler.doRun(
+          command,
+          this._makeCommandHelpers(command)
+        );
       } catch (err: any) {
         this._debugLog("Stopped running due to error state", err);
         this._insertionMode = "end";
