@@ -13,6 +13,8 @@ export interface ChainHelpers<Context extends {}> {
   retry(arg: { error: Error; maxRetries: number }): void;
 }
 
+// TODO: way to type the effect a command has on context,
+// and specify that certain commands require certain context values.
 export interface CommandsMapSupertype {
   [commandName: string]: (...args: any) => Promise<any>;
 }
