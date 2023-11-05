@@ -17,21 +17,26 @@ export interface CommandsMapSupertype {
   [commandName: string]: (...args: any) => Promise<any>;
 }
 
+export type PromiseWithMethods<
+  LastReturnValue,
+  CommandsMap extends CommandsMapSupertype,
+> = {
+  [Key in keyof CommandsMap]: (
+    ...params: Parameters<CommandsMap[Key]>
+  ) => PromiseWithMethods<Awaited<ReturnType<CommandsMap[Key]>>, CommandsMap>;
+} & Promise<LastReturnValue>;
+
 export class CypressStyleAsync<
   CommandsMap extends CommandsMapSupertype,
   ChainContext extends {},
-  LastReturnValue = undefined
+  LastReturnValue = undefined,
 > {
   // @ts-ignore could be instantiated with different constraint
   _context: ChainContext & { lastReturnValue: LastReturnValue } = {
     lastReturnValue: undefined,
   };
 
-  api: {
-    [Key in keyof CommandsMap]: (
-      ...params: Parameters<CommandsMap[Key]>
-    ) => typeof this.api;
-  } & Promise<LastReturnValue>;
+  api: PromiseWithMethods<LastReturnValue, CommandsMap>;
 
   _currentPromise: Promise<LastReturnValue> = Promise.resolve() as any;
 
