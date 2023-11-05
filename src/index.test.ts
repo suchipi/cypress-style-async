@@ -1,4 +1,5 @@
 import { test, expect } from "vitest";
+import { sleep } from "a-mimir";
 import { type CommandInvocation, CypressStyleAsync } from "./index";
 
 test("sample code", async () => {
@@ -29,7 +30,7 @@ test("sample code", async () => {
   });
   myQueue.registerCommand("red", async (command, commandApi) => {
     calls.push([command, { ...commandApi.context }]);
-    await commandApi.sleep(3);
+    await sleep.async(3);
     return "red";
   });
   myQueue.registerCommand("green", async (command, commandApi) => {
@@ -40,7 +41,7 @@ test("sample code", async () => {
   });
   myQueue.registerCommand("blue", async (command, commandApi) => {
     calls.push([command, { ...commandApi.context }]);
-    await commandApi.sleep(6);
+    await sleep.async(6);
     const [intensity] = command.args;
     commandApi.writeContext({ intensity });
     return "blue";

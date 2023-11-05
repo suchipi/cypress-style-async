@@ -10,7 +10,6 @@ export interface ChainHelpers<Context extends {}> {
   writeContext(obj: Partial<Context>): void;
   clearContext(): void;
 
-  sleep(ms: number): Promise<void>;
   retry(arg: { error: Error; maxRetries: number }): void;
 }
 
@@ -115,9 +114,6 @@ export class CypressStyleAsync<
       clearContext: () => {
         // @ts-ignore could be assignable to different constraint
         this._context = {};
-      },
-      sleep(ms) {
-        return new Promise((resolve) => setTimeout(resolve, ms));
       },
       retry: ({ error, maxRetries }) => {
         if (command.retryCount >= maxRetries) {
