@@ -67,6 +67,56 @@ mySystem.registerCommand("fetchBlob", async (command, api) => {
 module.exports = mySystem.api;
 ```
 
+## Sub-commands
+
+A command handler can use `mySystem.api` itself. Commands it queues that way are **sub-commands** of the command that queued them.
+
+If you `await` a sub-command (or `return` it), it runs right then, nested inside the handler, and you get its return value back:
+
+```js
+mySystem.registerCommand("outer", async (command, api) => {
+  const value = await mySystem.api.inner(); // `inner` runs here, before `outer` finishes
+  return `outer saw ${value}`;
+});
+```
+
+If you don't await it, it runs after the current command finishes, ahead of whatever else was already queued:
+
+```js
+mySystem.registerCommand("outer", async (command, api) => {
+  mySystem.api.inner(); // queued, runs once `outer` returns
+  return "done";
+});
+```
+
+You can queue a fresh copy of the current command as a sub-command, which is how you set up something you depend on and then start over:
+
+```js
+mySystem.registerCommand("runsInPhase2", async (command, api) => {
+  if (api.context.phase !== 2) {
+    mySystem.api.setupPhase2();
+    // queues a second runsInPhase2, whose result becomes this one's result
+    return mySystem.api.runsInPhase2();
+  }
+
+  return doTheActualWork();
+});
+```
+
+Errors propagate normally: a failing sub-command rejects the `await` in its parent, so the parent can `try`/`catch` it. If nobody catches it, it bubbles out to `onError` once, no matter how deeply the failing command was nested.
+
+### Caveat: don't queue commands from an unrelated async continuation
+
+A command is treated as a sub-command whenever it's queued while another command is running. That's what makes the above work, but it means this doesn't do what it looks like:
+
+```js
+mySystem.api.slowThing();
+await somethingUnrelated(); // `slowThing` starts running during this
+await mySystem.api.other(); // treated as a sub-command of `slowThing`
+```
+
+`other` still runs, and the `await` still gives you its return value, but it runs nested inside `slowThing` rather than after it. Queue your commands synchronously (`api.a().b().c()`, or several statements in a row) and this won't come up. Cypress has the same caveat about interleaving `async`/`await` with commands.
+
 ## License
 
 MIT
