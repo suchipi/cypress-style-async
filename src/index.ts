@@ -156,7 +156,7 @@ export class CypressStyleAsync<
           throw error;
         } else {
           command.retryCount += 1;
-          this._nextPrependedCommandQueue.unshift(command);
+          this._nextPrependedCommandQueue.push(command);
         }
       },
     };

@@ -103,3 +103,32 @@ test("a command with no registered handler errors", async () => {
     "No registered command handler for command 'nope'"
   );
 });
+
+test("retry re-runs the command after prerequisites it queued", async () => {
+  const runs: Array<string> = [];
+
+  const myQueue = new CypressStyleAsync<
+    {
+      launch: () => Promise<void>;
+      getPage: () => Promise<string>;
+    },
+    { browser?: string }
+  >({ onCommandRun: (command) => runs.push(command.name) });
+
+  myQueue.registerCommand("launch", async (command, commandApi) => {
+    commandApi.writeContext({ browser: "a browser" });
+  });
+  myQueue.registerCommand("getPage", async (command, commandApi) => {
+    if (!commandApi.context.browser) {
+      myQueue.api.launch();
+      return commandApi.retry({
+        error: new Error("launch didn't set the browser context"),
+        maxRetries: 2,
+      }) as never;
+    }
+    return "page";
+  });
+
+  expect(await myQueue.api.getPage()).toBe("page");
+  expect(runs).toEqual(["getPage", "launch", "getPage"]);
+});
